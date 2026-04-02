@@ -1,7 +1,8 @@
-import { ObjectId } from "mongodb";
+import { randomUUID } from "node:crypto";
+import type { QueryResultRow } from "pg";
 
 import { EI_DIMENSIONS, PART_B_QUESTION_IDS } from "@/lib/assessmentData";
-import { getMongoClientPromise } from "@/lib/mongodb";
+import { getPostgresPool } from "@/lib/postgres";
 import {
   computeAssessmentResult,
   type AnswersMap,
@@ -9,10 +10,10 @@ import {
   type EICategory,
 } from "@/lib/scoring";
 
-const DATABASE_NAME = process.env.MONGODB_DB ?? "ei_assessment_db";
-const COLLECTION_NAME = "assessments";
+const TABLE_NAME = "assessments";
 
-type AssessmentDocument = {
+type AssessmentRecord = {
+  id: string;
   answers: Record<string, number>;
   totalScore: number;
   category: EICategory;
@@ -31,10 +32,45 @@ export type StoredAssessment = {
   createdAt: string;
 };
 
-async function getCollection() {
-  const client = await getMongoClientPromise();
-  const database = client.db(DATABASE_NAME);
-  return database.collection<AssessmentDocument>(COLLECTION_NAME);
+type AssessmentRow = QueryResultRow & {
+  id: string;
+  answers: Record<string, number> | string;
+  total_score: number;
+  category: EICategory;
+  dimension_scores: AssessmentResult["dimensionScores"] | string;
+  part_b_score: number;
+  created_at: Date | string;
+};
+
+let tableReadyPromise: Promise<void> | undefined;
+
+async function ensureTable() {
+  if (tableReadyPromise) {
+    return tableReadyPromise;
+  }
+
+  const pool = getPostgresPool();
+  tableReadyPromise = pool
+    .query(
+      `
+      CREATE TABLE IF NOT EXISTS ${TABLE_NAME} (
+        id UUID PRIMARY KEY,
+        answers JSONB NOT NULL,
+        total_score INTEGER NOT NULL,
+        category TEXT NOT NULL,
+        dimension_scores JSONB NOT NULL,
+        part_b_score INTEGER NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `,
+    )
+    .then(() => undefined)
+    .catch((error) => {
+      tableReadyPromise = undefined;
+      throw error;
+    });
+
+  return tableReadyPromise;
 }
 
 function toNumberKeyedAnswerMap(answers: Record<string, number>): AnswersMap {
@@ -56,6 +92,14 @@ function computePartBScore(answers: AnswersMap): number {
   }, 0);
 }
 
+function parseJsonField<T>(value: T | string): T {
+  if (typeof value === "string") {
+    return JSON.parse(value) as T;
+  }
+
+  return value;
+}
+
 export function getDimensionRecords(dimensionScores: AssessmentResult["dimensionScores"]) {
   return EI_DIMENSIONS.map((dimension) => ({
     key: dimension.key,
@@ -66,14 +110,17 @@ export function getDimensionRecords(dimensionScores: AssessmentResult["dimension
 }
 
 export async function createAssessment(answers: AnswersMap) {
-  const collection = await getCollection();
+  await ensureTable();
+  const pool = getPostgresPool();
   const computed = computeAssessmentResult(answers);
+  const id = randomUUID();
 
   const serializableAnswers = Object.fromEntries(
     Object.entries(answers).map(([questionId, value]) => [questionId, Number(value)]),
   );
 
-  const document: AssessmentDocument = {
+  const record: AssessmentRecord = {
+    id,
     answers: serializableAnswers,
     totalScore: computed.totalScore,
     category: computed.category,
@@ -82,38 +129,81 @@ export async function createAssessment(answers: AnswersMap) {
     createdAt: new Date(),
   };
 
-  const insertResult = await collection.insertOne(document);
+  await pool.query(
+    `
+      INSERT INTO ${TABLE_NAME} (
+        id,
+        answers,
+        total_score,
+        category,
+        dimension_scores,
+        part_b_score,
+        created_at
+      )
+      VALUES ($1, $2::jsonb, $3, $4, $5::jsonb, $6, $7)
+    `,
+    [
+      record.id,
+      JSON.stringify(record.answers),
+      record.totalScore,
+      record.category,
+      JSON.stringify(record.dimensionScores),
+      record.partBScore,
+      record.createdAt,
+    ],
+  );
 
   return {
-    id: insertResult.insertedId.toString(),
+    id: record.id,
     totalScore: computed.totalScore,
     category: computed.category,
     dimensionScores: computed.dimensionScores,
-    partBScore: document.partBScore,
+    partBScore: record.partBScore,
   };
 }
 
 export async function getAssessmentById(id: string): Promise<StoredAssessment | null> {
-  if (!ObjectId.isValid(id)) {
+  if (!id?.trim()) {
     return null;
   }
 
-  const collection = await getCollection();
-  const document = await collection.findOne({ _id: new ObjectId(id) });
+  await ensureTable();
+  const pool = getPostgresPool();
+  const queryResult = await pool.query<AssessmentRow>(
+    `
+      SELECT
+        id,
+        answers,
+        total_score,
+        category,
+        dimension_scores,
+        part_b_score,
+        created_at
+      FROM ${TABLE_NAME}
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [id],
+  );
 
-  if (!document) {
+  const row = queryResult.rows[0];
+
+  if (!row) {
     return null;
   }
 
-  const normalizedAnswers = toNumberKeyedAnswerMap(document.answers);
+  const answers = parseJsonField<Record<string, number>>(row.answers);
+  const dimensionScores = parseJsonField<AssessmentResult["dimensionScores"]>(row.dimension_scores);
+
+  const normalizedAnswers = toNumberKeyedAnswerMap(answers);
 
   return {
-    id,
-    answers: document.answers,
-    totalScore: document.totalScore,
-    category: document.category,
-    dimensionScores: document.dimensionScores,
-    partBScore: computePartBScore(normalizedAnswers),
-    createdAt: document.createdAt.toISOString(),
+    id: row.id,
+    answers,
+    totalScore: row.total_score,
+    category: row.category,
+    dimensionScores,
+    partBScore: row.part_b_score ?? computePartBScore(normalizedAnswers),
+    createdAt: new Date(row.created_at).toISOString(),
   };
 }

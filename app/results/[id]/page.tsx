@@ -47,7 +47,7 @@ export default async function ResultsPage({ params }: ResultsPageProps) {
           <h1 className="text-2xl font-semibold text-amber-900">Configuration Required</h1>
           <p className="mt-2 text-sm text-amber-800">{dataError}</p>
           <p className="mt-3 text-sm text-amber-800">
-            Add MONGODB_URI in your environment variables to view saved assessments.
+            Add POSTGRES_URL in your environment variables to view saved assessments.
           </p>
         </section>
       </main>

@@ -1,92 +1,75 @@
 # Emotional Intelligence (EI) Assessment Framework for Evaluating Workplace Effectiveness
 
-A full-stack academic web application that measures emotional intelligence and links it to workplace effectiveness.
-
-The platform provides a guided questionnaire, automated EI scoring, MongoDB result storage, and visual analytics for interpretation.
+A full-stack academic web application for measuring emotional intelligence in workplace contexts, with PostgreSQL-backed result storage and interactive analytics.
 
 ## Table of Contents
 
-- Project Summary
-- Core Features
+- Project Overview
+- Key Features
 - Technology Stack
-- System Architecture
+- Architecture and Data Flow
 - Project Structure
-- Assessment Model
-- Scoring Model
-- Application Flow
-- API Reference
-- Database Schema
-- UI and UX Details
-- Setup and Local Development
-- Deployment Guide
+- Assessment Design
+- Scoring and Classification Logic
+- API Documentation
+- PostgreSQL Schema
+- Environment Variables
+- Local Setup
+- Deployment (Vercel + PostgreSQL)
 - Validation Checklist
 - Troubleshooting
-- Future Enhancements
+- Future Scope
 
-## Project Summary
+## Project Overview
 
-This project evaluates emotional intelligence in workplace context through two parts:
+This project evaluates emotional intelligence and workplace effectiveness using a structured questionnaire.
 
 - Part A: Emotional Intelligence (25 questions)
 - Part B: Workplace Effectiveness (10 questions)
 
-Only Part A is used for EI classification, while Part B is stored and shown separately as workplace effectiveness score.
+Only Part A is used for EI classification. Part B is stored and displayed as a separate workplace effectiveness score.
 
-### Main Goal
+## Key Features
 
-Build a modern, clean, professional HR-style assessment experience that includes:
-
-- Dimension-based questionnaire
-- Automated scoring and categorization
-- Dimension-wise analysis
-- Chart-based visualization
-- Interpretation and practical applications
-
-## Core Features
-
-- Home page with framework overview and dimension cards
-- Multi-step section-based questionnaire (6 steps)
+- Professional, modern, responsive UI with card-based layout
+- Home page with framework introduction and EI dimensions
+- Multi-step questionnaire with progress tracking
 - 5-point Likert scale for all 35 questions
-- Progress tracking and section completion states
-- Server-side validation of all responses
-- EI scoring using Part A only
-- Score classification into High/Moderate/Low EI
-- Dimension-wise score breakdown (5 dimensions)
+- Server-side validation for complete and valid submissions
+- EI score calculation and category classification
+- Dimension-wise score breakdown
 - Results page with:
-	- Total EI score
-	- EI category
-	- Workplace effectiveness score
-	- Bar chart
-	- Radar chart
-	- Interpretation and HR applications
-- MongoDB persistence using Next.js API routes
-- Graceful handling for missing MongoDB configuration and invalid result IDs
+  - Total EI score
+  - EI category
+  - Part B workplace score
+  - Bar chart and radar chart
+  - Interpretation and applications
+- PostgreSQL persistence through Next.js API routes
 
 ## Technology Stack
 
-- Framework: Next.js 16 (App Router)
+- Frontend + Backend: Next.js 16 (App Router)
 - Language: TypeScript
 - Styling: Tailwind CSS v4
-- Database: MongoDB (Atlas or local)
-- Icons: lucide-react
-- Charts: recharts
+- Database: PostgreSQL
+- Charts: Recharts
+- Icons: Lucide React
 - Linting: ESLint
 
-## System Architecture
+## Architecture and Data Flow
 
-High-level flow:
-
-1. User answers 35 questions in the assessment page.
-2. Frontend sends answers to POST /api/assessments.
-3. API validates all answer values (must be 1 to 5).
-4. Server computes:
-	 - Part A total EI score
-	 - EI category
-	 - Dimension-wise scores
-	 - Part B workplace score
-5. Server stores result in MongoDB and returns inserted id.
-6. Frontend redirects to /results/[id].
-7. Results page fetches stored assessment and renders analytics.
+1. User completes questionnaire at /assessment.
+2. Frontend submits answers to POST /api/assessments.
+3. API validates all answers (must be 1 to 5 for each of 35 questions).
+4. Backend computes:
+   - EI total score (Part A only)
+   - EI category
+   - Dimension scores
+   - Part B workplace score
+5. Data is inserted into PostgreSQL table assessments.
+6. API returns generated UUID id.
+7. Frontend redirects to /results/[id].
+8. Results page fetches record with GET /api/assessments/[id] and renders charts.
 
 ## Project Structure
 
@@ -114,16 +97,16 @@ High-level flow:
 ├── lib
 │   ├── assessmentData.ts
 │   ├── assessmentRepository.ts
-│   ├── mongodb.ts
+│   ├── postgres.ts
 │   └── scoring.ts
 ├── .env.example
 ├── package.json
 └── README.md
 ```
 
-## Assessment Model
+## Assessment Design
 
-### Likert Scale (All Questions)
+### Likert Scale
 
 - 1 = Strongly Disagree
 - 2 = Disagree
@@ -131,17 +114,26 @@ High-level flow:
 - 4 = Agree
 - 5 = Strongly Agree
 
-### Part A: Emotional Intelligence (Questions 1 to 25)
+### Part A: Emotional Intelligence (Q1-Q25)
 
-Dimensions and question grouping:
+Dimensions:
 
-- Self-Awareness: 1 to 5
-- Self-Regulation: 6 to 10
-- Motivation: 11 to 15
-- Empathy: 16 to 20
-- Social Skills: 21 to 25
+- Self-Awareness (Q1-Q5)
+- Self-Regulation (Q6-Q10)
+- Motivation (Q11-Q15)
+- Empathy (Q16-Q20)
+- Social Skills (Q21-Q25)
 
-Questions:
+### Part B: Workplace Effectiveness (Q26-Q35)
+
+Categories:
+
+- Performance (Q26-Q27)
+- Teamwork (Q28-Q30)
+- Leadership (Q31-Q32)
+- Conflict Resolution (Q33-Q35)
+
+### Full Question Set
 
 1. I can easily recognize and name my emotions as I experience them.
 2. When I receive negative feedback, I understand why it affects me.
@@ -168,18 +160,6 @@ Questions:
 23. I build strong professional relationships.
 24. I encourage participation in group discussions.
 25. I work well with different personalities.
-
-### Part B: Workplace Effectiveness (Questions 26 to 35)
-
-Categories and grouping:
-
-- Performance: 26 to 27
-- Teamwork: 28 to 30
-- Leadership: 31 to 32
-- Conflict Resolution: 33 to 35
-
-Questions:
-
 26. I meet or exceed my work targets consistently.
 27. My emotional control improves my work quality.
 28. I contribute to a positive team environment.
@@ -191,37 +171,24 @@ Questions:
 34. I de-escalate tense situations effectively.
 35. I aim for win-win solutions.
 
-## Scoring Model
+## Scoring and Classification Logic
 
-### EI Total Score
+### EI Total Score (Part A only)
 
-Only Part A contributes to EI total:
+- Formula: sum of Q1 to Q25
+- Minimum: 25
+- Maximum: 125
 
-```text
-EI Total Score = sum(Q1 ... Q25)
-Minimum = 25
-Maximum = 125
-```
+### Dimension Scores
 
-### Dimension Score
+- Each dimension has 5 questions
+- Score range per dimension: 5 to 25
 
-Each dimension has 5 questions:
+### Workplace Effectiveness Score (Part B)
 
-```text
-Dimension Score = sum(its 5 mapped questions)
-Minimum per dimension = 5
-Maximum per dimension = 25
-```
-
-### Workplace Effectiveness Score
-
-Part B is stored and shown separately:
-
-```text
-Workplace Effectiveness Score = sum(Q26 ... Q35)
-Minimum = 10
-Maximum = 50
-```
+- Formula: sum of Q26 to Q35
+- Minimum: 10
+- Maximum: 50
 
 ### EI Classification
 
@@ -229,43 +196,7 @@ Maximum = 50
 - 70 to 99: Moderate Emotional Intelligence
 - 25 to 69: Low Emotional Intelligence
 
-## Application Flow
-
-### Home Page (/)
-
-- Presents framework intro and purpose
-- Shows EI dimensions with icons/cards
-- Shows scoring thresholds
-- Start Assessment button routes to /assessment
-
-### Assessment Page (/assessment)
-
-- 6 steps:
-	- 5 EI dimensions
-	- 1 Workplace Effectiveness section
-- Prevents moving forward if current section is incomplete
-- Shows global progress bar for all 35 questions
-- Submits answers to backend API
-- Redirects to /results/[id]
-
-### Results Page (/results/[id])
-
-Displays:
-
-- Total EI Score
-- EI Category
-- Part B Workplace Effectiveness Score
-- Dimension-wise bars with percentage fill
-- Bar chart and radar chart
-- Interpretation section for all categories
-- Practical workplace applications
-
-Also handles:
-
-- Missing MongoDB configuration
-- Invalid or non-existing assessment id
-
-## API Reference
+## API Documentation
 
 ### POST /api/assessments
 
@@ -275,43 +206,43 @@ Request body:
 
 ```json
 {
-	"answers": {
-		"1": 4,
-		"2": 3,
-		"3": 4,
-		"4": 5,
-		"5": 4,
-		"6": 4,
-		"7": 3,
-		"8": 4,
-		"9": 4,
-		"10": 3,
-		"11": 4,
-		"12": 4,
-		"13": 5,
-		"14": 4,
-		"15": 5,
-		"16": 4,
-		"17": 4,
-		"18": 5,
-		"19": 4,
-		"20": 4,
-		"21": 5,
-		"22": 4,
-		"23": 5,
-		"24": 4,
-		"25": 5,
-		"26": 4,
-		"27": 4,
-		"28": 5,
-		"29": 4,
-		"30": 4,
-		"31": 4,
-		"32": 4,
-		"33": 4,
-		"34": 4,
-		"35": 5
-	}
+  "answers": {
+    "1": 4,
+    "2": 3,
+    "3": 4,
+    "4": 5,
+    "5": 4,
+    "6": 4,
+    "7": 3,
+    "8": 4,
+    "9": 4,
+    "10": 3,
+    "11": 4,
+    "12": 4,
+    "13": 5,
+    "14": 4,
+    "15": 5,
+    "16": 4,
+    "17": 4,
+    "18": 5,
+    "19": 4,
+    "20": 4,
+    "21": 5,
+    "22": 4,
+    "23": 5,
+    "24": 4,
+    "25": 5,
+    "26": 4,
+    "27": 4,
+    "28": 5,
+    "29": 4,
+    "30": 4,
+    "31": 4,
+    "32": 4,
+    "33": 4,
+    "34": 4,
+    "35": 5
+  }
 }
 ```
 
@@ -319,226 +250,194 @@ Success response:
 
 ```json
 {
-	"id": "67ecf8f1f06b96b4d0bf1a5a",
-	"totalScore": 103,
-	"category": "High Emotional Intelligence",
-	"dimensionScores": {
-		"selfAwareness": 20,
-		"selfRegulation": 18,
-		"motivation": 22,
-		"empathy": 21,
-		"socialSkills": 22
-	},
-	"partBScore": 42
+  "id": "6f78d8bc-0805-4e15-9f6a-80511f0a57ef",
+  "totalScore": 103,
+  "category": "High Emotional Intelligence",
+  "dimensionScores": {
+    "selfAwareness": 20,
+    "selfRegulation": 18,
+    "motivation": 22,
+    "empathy": 21,
+    "socialSkills": 22
+  },
+  "partBScore": 42
 }
 ```
 
-Validation errors:
+Error responses:
 
-- 400 if answers are missing or any question is not answered with value 1 to 5.
-- 500 for unexpected server/database errors.
+- 400: invalid or missing answers
+- 500: server/database error
 
 ### GET /api/assessments/[id]
 
-Fetches one stored assessment by Mongo ObjectId.
+Fetches one assessment record by UUID id.
 
 Success response:
 
 ```json
 {
-	"id": "67ecf8f1f06b96b4d0bf1a5a",
-	"answers": {
-		"1": 4,
-		"2": 3
-	},
-	"totalScore": 103,
-	"category": "High Emotional Intelligence",
-	"dimensionScores": {
-		"selfAwareness": 20,
-		"selfRegulation": 18,
-		"motivation": 22,
-		"empathy": 21,
-		"socialSkills": 22
-	},
-	"partBScore": 42,
-	"createdAt": "2026-04-02T10:30:15.000Z",
-	"dimensionChartData": [
-		{
-			"key": "selfAwareness",
-			"name": "Self-Awareness",
-			"score": 20,
-			"max": 25
-		}
-	]
+  "id": "6f78d8bc-0805-4e15-9f6a-80511f0a57ef",
+  "answers": {
+    "1": 4,
+    "2": 3
+  },
+  "totalScore": 103,
+  "category": "High Emotional Intelligence",
+  "dimensionScores": {
+    "selfAwareness": 20,
+    "selfRegulation": 18,
+    "motivation": 22,
+    "empathy": 21,
+    "socialSkills": 22
+  },
+  "partBScore": 42,
+  "createdAt": "2026-04-02T10:30:15.000Z",
+  "dimensionChartData": [
+    {
+      "key": "selfAwareness",
+      "name": "Self-Awareness",
+      "score": 20,
+      "max": 25
+    }
+  ]
 }
 ```
 
-Errors:
+Error responses:
 
-- 404 if id is invalid format or record not found.
-- 500 for unexpected server/database errors.
+- 404: id not found
+- 500: server/database error
 
-## Database Schema
+## PostgreSQL Schema
 
-Collection name: assessments
+The application auto-creates the table at runtime if it does not exist.
 
-Document shape:
+Table name: assessments
 
-```ts
-{
-	_id: ObjectId,
-	answers: Record<string, number>,
-	totalScore: number,
-	category: "High Emotional Intelligence" | "Moderate Emotional Intelligence" | "Low Emotional Intelligence",
-	dimensionScores: {
-		selfAwareness: number,
-		selfRegulation: number,
-		motivation: number,
-		empathy: number,
-		socialSkills: number
-	},
-	partBScore: number,
-	createdAt: Date
-}
+```sql
+CREATE TABLE IF NOT EXISTS assessments (
+  id UUID PRIMARY KEY,
+  answers JSONB NOT NULL,
+  total_score INTEGER NOT NULL,
+  category TEXT NOT NULL,
+  dimension_scores JSONB NOT NULL,
+  part_b_score INTEGER NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 ```
 
-## UI and UX Details
+## Environment Variables
 
-- Visual style: clean, minimal, professional
-- Theme direction: soft blue and indigo gradients
-- Layout style: card-based with subtle shadows and rounded surfaces
-- Motion: smooth transitions and staggered reveal animations
-- Responsiveness: mobile-first with adaptive grid and spacing
-- Accessibility basics:
-	- Semantic sections and headings
-	- Radio groups for Likert choices
-	- Disabled states for navigation and submit actions
+Use .env.local for local development.
 
-## Setup and Local Development
+Example:
 
-### Prerequisites
+```env
+POSTGRES_URL=postgresql://<username>:<password>@<host>:5432/<database>?sslmode=require
+```
 
-- Node.js 20+
-- npm 10+
-- MongoDB Atlas cluster (recommended) or local MongoDB instance
+Notes:
 
-### 1) Install dependencies
+- POSTGRES_URL is required.
+- .env.example is a template and should not contain real credentials.
+
+## Local Setup
+
+1. Install dependencies:
 
 ```bash
 npm install
 ```
 
-### 2) Configure environment variables
-
-Create local env file:
+2. Create local environment file:
 
 ```bash
 cp .env.example .env.local
 ```
 
-Set values in .env.local:
+3. Update .env.local with your PostgreSQL connection string.
 
-```env
-# MongoDB connection string (Atlas or local)
-MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-url>/
-
-# Optional database name (defaults to ei_assessment_db)
-MONGODB_DB=ei_assessment_db
-```
-
-### 3) Start development server
+4. Run development server:
 
 ```bash
 npm run dev
 ```
 
-Open http://localhost:3000
+5. Open in browser:
 
-### 4) Quality checks
+http://localhost:3000
+
+### Quality Checks
 
 ```bash
 npm run lint
 npm run build
 ```
 
-### 5) Run production mode locally (optional)
-
-```bash
-npm run build
-npm run start
-```
-◊
-## Deployment Guide
-
-### Deploy to Vercel
+## Deployment (Vercel + PostgreSQL)
 
 1. Push code to GitHub.
-2. Import repository in Vercel.
-3. Configure environment variables in Vercel project settings:
-	 - MONGODB_URI
-	 - MONGODB_DB (optional)
+2. Import repo in Vercel.
+3. Set environment variables in Vercel:
+  - POSTGRES_URL
 4. Deploy.
 
-### MongoDB Atlas Setup
+Recommended providers:
 
-1. Create a cluster.
-2. Create database user.
-3. Add IP allow list (or Vercel outbound access strategy).
-4. Copy connection URI and set MONGODB_URI.
+- Neon
+- Railway Postgres
+- Render Postgres
+- AWS RDS Postgres
 
 ## Validation Checklist
 
-Use this checklist after deployment:
-
-- Home page loads and Start Assessment button works.
-- Assessment enforces completion before next step.
-- All 35 answers are required before submit.
-- Submission returns a valid result id.
-- Results page shows score, category, and chart visualizations.
-- Missing/invalid id returns not found state.
-- Missing MongoDB env shows configuration message.
-- Lint and build pass without errors.
+- Home page loads and Start Assessment works.
+- Assessment requires every answer before submit.
+- Submission returns a UUID id.
+- Results page renders score, category, breakdown, and charts.
+- Missing id shows not-found state.
+- Missing Postgres env shows configuration message.
+- Lint and build pass.
 
 ## Troubleshooting
 
-### Error: Please define MONGODB_URI in your environment variables.
+### Error: Please define POSTGRES_URL in your environment variables.
 
 Cause:
 
-- MONGODB_URI is missing in .env.local or deployment environment.
+- Database URL is not configured.
 
 Fix:
 
-- Add MONGODB_URI, restart dev server, and re-test.
+- Add POSTGRES_URL in .env.local or deployment env settings.
+- Restart the dev server.
 
-### Assessment not found on results page
+### TLS or SSL connection errors with managed Postgres
 
 Cause:
 
-- Wrong id, deleted record, or invalid ObjectId.
+- Provider requires SSL/TLS but client is not configured for SSL.
 
 Fix:
 
-- Submit assessment again and use returned id route.
+- Add sslmode=require in POSTGRES_URL.
+- Verify provider connection string and firewall/IP rules.
 
-### Build passes but runtime fetch fails
+### Results page shows record not found
 
 Cause:
 
-- Database network/access settings in MongoDB Atlas are not configured.
+- Invalid id or deleted record.
 
 Fix:
 
-- Check Atlas user permissions, connection URI, and IP/network allow list.
+- Submit a new assessment and use generated id route.
 
-## Future Enhancements
+## Future Scope
 
-- AI-based personalized recommendations for EI development
-- User authentication and result history dashboard
+- AI-based personalized EI feedback
+- User login and result history
 - PDF export for HR and academic reporting
-- Admin analytics panel across participants
-- Benchmarking against team or department averages
-
----
-
-This project is designed for academic and learning purposes in emotional intelligence and workplace effectiveness analysis.
+- Admin analytics dashboard
+- Team-level benchmarking
